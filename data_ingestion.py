@@ -85,36 +85,40 @@ class VisionSafeEliteIngestor:
         }
 
     def run(self):
-        """Main execution flow for GitHub Actions."""
-        print(f"Starting Elite Ingestion at {datetime.now()}")
+        """Main execution flow for GitHub Actions with enhanced logging."""
+        print(f"--- VisionSafe Data Ingestion Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---")
         sources = self.get_data_sources()
-        new_items_count = 0
+        
+        stats = {
+            "total_scanned": 0,
+            "total_new": 0,
+            "total_skipped": 0,
+            "errors": 0
+        }
         
         for name, config in sources.items():
-            print(f"Scanning source: {name}")
+            print(f"\n[Source] {name}")
             try:
                 if config["type"] == "rss":
                     feed = feedparser.parse(config["url"])
-                    entries = feed.entries[:50] # Limit per source
+                    entries = feed.entries[:30] # Limit per source
                     
                     for entry in entries:
+                        stats["total_scanned"] += 1
                         url = entry.link
                         title = entry.title
                         
-                        # Filtering if required
                         if config["filter"]:
                             combined_text = title + " " + (entry.summary if hasattr(entry, 'summary') else "")
                             if not self.is_eye_related(combined_text):
+                                stats["total_skipped"] += 1
                                 continue
                         
-                        # Global Deduplication
                         doc_id = self.generate_id(url)
                         doc_ref = self.db.collection(self.collection_name).document(doc_id)
                         
                         if not doc_ref.get().exists:
-                            print(f"New article found: {title}")
                             content = self.extract_full_content(url)
-                            
                             if content:
                                 payload = {
                                     "title": title,
@@ -128,14 +132,23 @@ class VisionSafeEliteIngestor:
                                     "fingerprint": doc_id
                                 }
                                 doc_ref.set(payload)
-                                new_items_count += 1
-                                time.sleep(1) # Polite crawling delay
-                                
+                                stats["total_new"] += 1
+                                print(f"  [NEW] {title}")
+                                time.sleep(1) # Polite delay
+                        else:
+                            stats["total_skipped"] += 1
+                            
             except Exception as e:
-                print(f"Error processing source {name}: {e}")
+                print(f"  [ERROR] {name}: {e}")
+                stats["errors"] += 1
                 continue
 
-        print(f"Ingestion complete. Total new elite articles: {new_items_count}")
+        print("\n--- Ingestion Summary ---")
+        print(f"Total Scanned : {stats['total_scanned']}")
+        print(f"Total New     : {stats['total_new']}")
+        print(f"Total Skipped : {stats['total_skipped']}")
+        print(f"Errors Found  : {stats['errors']}")
+        print(f"Finished at   : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 if __name__ == "__main__":
     ingestor = VisionSafeEliteIngestor()
