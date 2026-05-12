@@ -1,30 +1,37 @@
-# VisionSafe: Big Data Ingestion & Analytics Pipeline
+# VisionSafe: Big Data Ingestion dan Analytics Pipeline
 
-Repository ini berisi sistem otomatisasi pengumpulan data (Data Ingestion) dan analisis data untuk project **VisionSafe**. Sistem ini dirancang untuk memenuhi standar pengolahan Big Data dengan alur kerja yang otomatis dan terstruktur.
+Project ini dibuat untuk memenuhi tugas mata kuliah Big Data. Fokus utamanya adalah melakukan pengambilan data berita kesehatan mata dari berbagai sumber terpercaya secara otomatis, menyimpannya ke database, dan melakukan analisis teks.
 
-## 🚀 Fitur Utama
-- **Automated Crawler:** Mengambil data dari 10+ sumber otoritas kesehatan dunia (WHO, NIH, Kemenkes, dll).
-- **GitHub Actions Integration:** Proses crawling berjalan otomatis setiap hari tanpa intervensi manual.
-- **Firebase Firestore Storage:** Data disimpan dalam database NoSQL yang scalable.
-- **NLP Analytics:** Preprocessing teks bilingual dan visualisasi tren kesehatan mata.
+## Langkah Pengerjaan
 
-## 📁 Struktur Folder
-- `.github/workflows/`: Konfigurasi GitHub Actions untuk jadwal sinkronisasi harian.
-- `data_ingestion.py`: Script Python utama untuk crawling dan ekstraksi data (SDA Elite Logic).
-- `requirements.txt`: Daftar dependensi Python yang diperlukan.
-- `DOKUMENTASI_COLAB_BIGDATA_FIX.txt`: Penjelasan teknis langkah-langkah pengerjaan tugas.
+1. Pengumpulan Data (Data Collection)
+Sistem menggunakan script Python (data_ingestion.py) yang berjalan secara otomatis melalui GitHub Actions. Data diambil dari berbagai sumber seperti WHO, NIH, Kemenkes, dan portal berita kesehatan lainnya.
 
-## 🛠️ Cara Penggunaan (Local Setup)
-1. Install dependensi:
-   ```bash
+2. Penyimpanan Data (Data Storage)
+Data yang telah diambil disimpan ke dalam database NoSQL yaitu Firebase Firestore. Setiap data memiliki ID unik berdasarkan URL berita untuk mencegah adanya data ganda (deduplikasi).
+
+3. Persiapan Data (Data Preparation)
+Data dari Firestore dibaca menggunakan Google Colaboratory. Tahap ini meliputi pembersihan teks dari simbol, angka, serta penghapusan kata sambung (stopwords) dalam bahasa Indonesia dan bahasa Inggris agar data siap dianalisis.
+
+4. Analisis dan Visualisasi Data
+Data yang sudah bersih divisualisasikan menggunakan grafik batang untuk melihat sebaran sumber data dan WordCloud untuk melihat tren topik kesehatan mata yang paling banyak dibahas.
+
+## Struktur File
+
+- data_ingestion.py: Script utama untuk mengambil data.
+- requirements.txt: Daftar library Python yang dibutuhkan.
+- .github/workflows/daily_sync.yml: Pengaturan jadwal otomatis harian di GitHub Actions.
+- DOKUMENTASI_COLAB_BIGDATA_FIX.txt: Penjelasan teknis lengkap pengerjaan tugas.
+
+## Cara Menjalankan Script Secara Lokal
+
+1. Install library yang dibutuhkan:
    pip install -r requirements.txt
-   ```
-2. Set Environment Variable:
-   Pastikan Anda memiliki file `serviceAccountKey.json` dari Firebase dan set ke dalam environment variable `FIREBASE_CONFIG`.
-3. Jalankan ingestion manual:
-   ```bash
-   python data_ingestion.py
-   ```
 
----
-*Dibuat untuk penilaian mata kuliah Big Data - VisionSafe Project.*
+2. Konfigurasi Database:
+   Pastikan file kredensial Firebase (serviceAccountKey.json) sudah disiapkan dan diatur dalam environment variable FIREBASE_CONFIG.
+
+3. Jalankan script:
+   python data_ingestion.py
+
+Project ini merupakan bagian dari pengerjaan Capstone Project VisionSafe.
