@@ -9,17 +9,22 @@ from firebase_admin import credentials, firestore
 from datetime import datetime
 import time
 
-class VisionSafeIngestor:
+# ==============================================================================
+# VISIONSAFE ABSOLUTE KNOWLEDGE ENGINE (SDA ELITE V7.0 - GITHUB EDITION)
+# ==============================================================================
+
+class VisionSafeEliteIngestor:
     def __init__(self):
         self.db = self._init_firebase()
         self.collection_name = "visionsafe_knowledge"
-        self.keywords = [
-            "kesehatan mata", "miopia", "katarak", 
-            "bahaya gadget", "glaukoma", "kesehatan retina"
-        ]
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
+        # Smart Filter Keywords
+        self.eye_keywords = [
+            'eye', 'vision', 'blindness', 'myopia', 'glaucoma', 'retina', 'sight', 'screen time', 
+            'mata', 'penglihatan', 'rabun', 'miopia', 'katarak', 'gadget', 'kacamata', 'ophthalmology'
+        ]
 
     def _init_firebase(self):
         """Initializes Firebase from environment variable."""
@@ -29,97 +34,109 @@ class VisionSafeIngestor:
         
         try:
             config_dict = json.loads(firebase_config_raw)
-            cred = credentials.Certificate(config_dict)
-            firebase_admin.initialize_app(cred)
+            if not firebase_admin._apps:
+                cred = credentials.Certificate(config_dict)
+                firebase_admin.initialize_app(cred)
             return firestore.client()
         except Exception as e:
             print(f"Error initializing Firebase: {e}")
             raise
 
     def generate_id(self, url):
-        """Generates a SHA-256 hash for deduplication."""
+        """Generates a SHA-256 hash for global deduplication."""
         return hashlib.sha256(url.encode('utf-8')).hexdigest()
 
-    def clean_html(self, html_content):
-        """Removes HTML tags and cleans whitespace using lxml for performance."""
-        if not html_content:
-            return ""
+    def is_eye_related(self, text):
+        """Smart filter to ensure relevance to eye health."""
+        if not text: return False
+        text_lower = text.lower()
+        return any(keyword in text_lower for keyword in self.eye_keywords)
+
+    def extract_full_content(self, url):
+        """Surgical Extraction of main article text with noise removal."""
         try:
-            soup = BeautifulSoup(html_content, "lxml")
-            return soup.get_text(separator=' ', strip=True)
-        except Exception:
-            # Fallback to html.parser if lxml fails
-            soup = BeautifulSoup(html_content, "html.parser")
-            return soup.get_text(separator=' ', strip=True)
-
-    def fetch_news(self, limit_per_run=50):
-        """Fetches news from Google News RSS for defined keywords."""
-        articles = []
-        seen_urls = set()
-
-        for keyword in self.keywords:
-            print(f"Fetching news for keyword: {keyword}")
-            rss_url = f"https://news.google.com/rss/search?q={keyword}&hl=id&gl=ID&ceid=ID:id"
+            response = requests.get(url, headers=self.headers, timeout=15)
+            soup = BeautifulSoup(response.text, 'lxml')
             
-            try:
-                feed = feedparser.parse(rss_url)
-                for entry in feed.entries:
-                    if len(articles) >= limit_per_run:
-                        break
-                    
-                    url = entry.link
-                    if url in seen_urls:
-                        continue
-                    
-                    # Basic extraction
-                    article_data = {
-                        "title": entry.title,
-                        "url": url,
-                        "published_at": entry.published,
-                        "source": entry.source.title if hasattr(entry, 'source') else "Google News",
-                        "summary_raw": entry.summary if hasattr(entry, 'summary') else "",
-                        "keyword": keyword,
-                        "ingested_at": firestore.SERVER_TIMESTAMP
-                    }
-                    
-                    # Clean summary
-                    article_data["summary"] = self.clean_html(article_data["summary_raw"])
-                    
-                    articles.append(article_data)
-                    seen_urls.add(url)
-                    
-            except Exception as e:
-                print(f"Error fetching RSS for {keyword}: {e}")
-                continue
-                
-            if len(articles) >= limit_per_run:
-                break
+            # Remove noise
+            for element in soup(["script", "style", "nav", "header", "footer", "aside", "form", "iframe"]):
+                element.decompose()
 
-        return articles
+            paragraphs = soup.find_all('p')
+            content = " ".join([p.get_text() for p in paragraphs])
+            content = " ".join(content.split()) # Normalize whitespace
+            
+            # Minimum threshold for quality content
+            return content if len(content) > 300 else None
+        except Exception as e:
+            print(f"Extraction failed for {url}: {e}")
+            return None
+
+    def get_data_sources(self):
+        """Centralized Authority Source Management."""
+        return {
+            "NIH National Eye Institute": {"url": "https://www.nei.nih.gov/about/news-and-events/news/feed", "type": "rss", "filter": False},
+            "WHO Global News": {"url": "https://www.who.int/rss-feeds/news-english.xml", "type": "rss", "filter": True},
+            "Medical News Today (Eye)": {"url": "https://www.medicalnewstoday.com/rss/eye-health", "type": "rss", "filter": False},
+            "Science Daily (Eye Care)": {"url": "https://www.sciencedaily.com/rss/health_medicine/eye_care.xml", "type": "rss", "filter": False},
+            "News Medical (Eye Health)": {"url": "https://www.news-medical.net/tag/feed/Eye-Health.aspx", "type": "rss", "filter": False},
+            "Kemenkes RI (Sehat Negeriku)": {"url": "https://sehatnegeriku.kemkes.go.id/feed/", "type": "rss", "filter": True},
+            "Google News (Eye Health ID)": {"url": "https://news.google.com/rss/search?q=kesehatan+mata+miopia+katarak&hl=id&gl=ID&ceid=ID:id", "type": "rss", "filter": False}
+        }
 
     def run(self):
-        """Main execution flow."""
-        print(f"Starting ingestion process at {datetime.now()}")
+        """Main execution flow for GitHub Actions."""
+        print(f"Starting Elite Ingestion at {datetime.now()}")
+        sources = self.get_data_sources()
+        new_items_count = 0
         
-        try:
-            articles = self.fetch_news(limit_per_run=50)
-            print(f"Found {len(articles)} articles.")
-            
-            success_count = 0
-            for article in articles:
-                doc_id = self.generate_id(article["url"])
-                doc_ref = self.db.collection(self.collection_name).document(doc_id)
-                
-                # Check if exists (deduplication)
-                if not doc_ref.get().exists:
-                    doc_ref.set(article)
-                    success_count += 1
-                
-            print(f"Ingestion complete. Successfully saved {success_count} new articles.")
-            
-        except Exception as e:
-            print(f"Ingestion failed: {e}")
+        for name, config in sources.items():
+            print(f"Scanning source: {name}")
+            try:
+                if config["type"] == "rss":
+                    feed = feedparser.parse(config["url"])
+                    entries = feed.entries[:50] # Limit per source
+                    
+                    for entry in entries:
+                        url = entry.link
+                        title = entry.title
+                        
+                        # Filtering if required
+                        if config["filter"]:
+                            combined_text = title + " " + (entry.summary if hasattr(entry, 'summary') else "")
+                            if not self.is_eye_related(combined_text):
+                                continue
+                        
+                        # Global Deduplication
+                        doc_id = self.generate_id(url)
+                        doc_ref = self.db.collection(self.collection_name).document(doc_id)
+                        
+                        if not doc_ref.get().exists:
+                            print(f"New article found: {title}")
+                            content = self.extract_full_content(url)
+                            
+                            if content:
+                                payload = {
+                                    "title": title,
+                                    "url": url,
+                                    "full_content": content,
+                                    "source": name,
+                                    "category": "Authoritative Intelligence",
+                                    "published_raw": entry.get("published", datetime.now().strftime("%Y-%m-%d")),
+                                    "collected_at": firestore.SERVER_TIMESTAMP,
+                                    "content_length": len(content),
+                                    "fingerprint": doc_id
+                                }
+                                doc_ref.set(payload)
+                                new_items_count += 1
+                                time.sleep(1) # Polite crawling delay
+                                
+            except Exception as e:
+                print(f"Error processing source {name}: {e}")
+                continue
+
+        print(f"Ingestion complete. Total new elite articles: {new_items_count}")
 
 if __name__ == "__main__":
-    ingestor = VisionSafeIngestor()
+    ingestor = VisionSafeEliteIngestor()
     ingestor.run()
